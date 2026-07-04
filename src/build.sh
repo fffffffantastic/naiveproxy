@@ -132,4 +132,4 @@ if [ "$host_os" = linux ]; then
   fi
 fi
 
-ninja -C "$out" cronet
+ninja -C "$out" cronet_package
