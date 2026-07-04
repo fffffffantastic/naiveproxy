@@ -1,55 +1,61 @@
-name: Build Cronet
+name: Build Cronet Windows
 
 on:
   workflow_dispatch:
-
-defaults:
-  run:
-    shell: bash
-    working-directory: src
 
 jobs:
   build:
     runs-on: windows-2022
 
+    defaults:
+      run:
+        shell: bash
+        working-directory: src
+
     env:
       EXTRA_FLAGS: 'target_cpu="x64"'
+      DEPOT_TOOLS_WIN_TOOLCHAIN: 0
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Clang
+      - name: Cache LLVM & GN
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/third_party/llvm-build/Release+Asserts
+            src/gn
+            ~/.cargo/bin
+            ~/bin/ninja.exe
+          key: toolchain-${{ hashFiles('CHROMIUM_VERSION') }}
+
+      - name: Cache Windows PGO
+        uses: actions/cache@v4
+        with:
+          path: src/chrome/build/pgo_profiles/chrome-win64-*
+          key: pgo-${{ hashFiles('CHROMIUM_VERSION') }}
+
+      - name: Install Ninja
+        run: |
+          mkdir -p ~/bin
+          if [ ! -f ~/bin/ninja.exe ]; then
+            curl -L https://github.com/ninja-build/ninja/releases/download/v1.11.1/ninja-win.zip -o ninja.zip
+            unzip ninja.zip -d ~/bin
+          fi
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Download Clang
         run: ./get-clang.sh
 
-      - name: Generate Build Files
+      - name: Build
+        run: ./build.sh
+
+      - name: Package
         run: |
-          export TMPDIR="$PWD/tmp"
-          rm -rf "$TMPDIR"
-          mkdir -p "$TMPDIR"
+          cd out/Release
+          7z a ../../../cronet-windows-x64.zip *
 
-          export DEPOT_TOOLS_WIN_TOOLCHAIN=0
-
-          ./gn/out/gn gen out/Release --args="
-            is_official_build=true
-            is_chrome_branded=true
-            is_clang=true
-            use_sysroot=false
-            is_cronet_build=true
-            target_cpu=\"x64\"
-          "
-
-      - name: Build Cronet
-        run: |
-          autoninja -C out/Release cronet_package
-
-      - name: List Release Directory
-        run: |
-          ls -R out/Release
-
-      - name: Upload Release Folder
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: cronet-release
-          path: src/out/Release/
-          if-no-files-found: error
+          name: cronet-windows-x64
+          path: cronet-windows-x64.zip
