@@ -132,4 +132,4 @@ if [ "$host_os" = linux ]; then
   fi
 fi
 
-ninja -C "$out" naive
+ninja -C "$out" cronet
